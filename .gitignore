@@ -1,0 +1,17 @@
+# Dependencies and generated verification artifacts
+node_modules/
+output/
+coverage/
+*.log
+
+# Local credentials and configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini

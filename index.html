@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta http-equiv="Content-Security-Policy" content="frame-src 'self'" />
+    <meta name="description" content="MIT - Model IQ Test 客观模型测试工作台" />
+    <link rel="icon" href="data:," />
+    <title>MIT - Model IQ Test</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="#workspace" aria-label="MIT - Model IQ Test 首页"><span>MIT - Model IQ Test</span></a>
+      <div class="header-actions"><a class="return-config" href="index.html">返回配置页</a><span class="session-label">临时会话</span><button class="text-button" id="themeButton" type="button" aria-pressed="false">深色</button></div>
+    </header>
+
+    <main class="page" id="workspace">
+      <aside class="intro" aria-labelledby="page-title">
+        <p class="kicker">MODEL IQ TEST</p>
+        <h1 id="page-title">模型降智测试</h1>
+        <p class="intro-copy">选择红绿色盲、糖果或鹈鹕测试，可同时运行多项测试，直接查看模型生成的原始结果。</p>
+        <div class="process" aria-label="测试流程">
+          <div class="process-item current"><span class="process-index">01</span><div><strong>配置模型</strong><small>在独立窗口填写接口信息</small></div></div>
+          <div class="process-item"><span class="process-index">02</span><div><strong>选择测试</strong><small>红绿色盲、糖果、鹈鹕，支持多选</small></div></div>
+          <div class="process-item"><span class="process-index">03</span><div><strong>查看结果</strong><small>在独立结果页等待答案与报告</small></div></div>
+        </div>
+        <div class="privacy-statement"><strong>Key 仅保留在当前页面内存</strong><span>经本站服务临时转发至你指定的 API，不写入本站日志或存储。结果页保留本次配置供单项重试，刷新或关闭后清除；服务端每次请求结束后释放。</span></div>
+      </aside>
+
+      <section class="workbench" aria-labelledby="workbench-title">
+        <div class="workbench-heading">
+          <div><h2 id="workbench-title">选择测试</h2><p>选择一项或多项测试，运行后在新页面等待结果。</p></div>
+          <button class="configure-model" id="openConnection" type="button"><span>配置模型</span><small class="connection-state" id="connectionState">未连接</small></button>
+        </div>
+
+        <div class="test-area" id="tests">
+          <div class="test-grid" role="group" aria-label="选择要运行的测试，可多选">
+            <label class="test-choice">
+              <input type="checkbox" name="test" value="colorblind" />
+              <span class="choice-top"><span class="option-code">COLOR BLINDNESS</span><span class="choice-check" aria-hidden="true"></span></span>
+              <span class="choice-copy"><strong>红绿色盲测试</strong><small>回答命中“遗传”“染色体”等任意关键词即通过。</small></span>
+              <span class="choice-result">结果：正确 / 错误</span>
+            </label>
+            <label class="test-choice selected">
+              <input type="checkbox" name="test" value="candy" checked />
+              <span class="choice-top"><span class="option-code">CANDY</span><span class="choice-check" aria-hidden="true"></span></span>
+              <span class="choice-copy"><strong>糖果测试</strong><small>求最少取糖数量，回答中出现“21”即通过。</small></span>
+              <span class="choice-result">结果：正确 / 错误</span>
+            </label>
+            <label class="test-choice">
+              <input type="checkbox" name="test" value="pelican" />
+              <span class="choice-top"><span class="option-code">PELICAN</span><span class="choice-check" aria-hidden="true"></span></span>
+              <span class="choice-copy"><strong>鹈鹕测试</strong><small>生成复古绘本风 HTML / SVG 动画，在隔离窗口中查看作品。</small></span>
+              <span class="choice-result">结果：仅检查 HTML / SVG，不评价画面</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="run-bar" id="result"><div><span>本次测试</span><strong id="runSummary">糖果测试</strong></div><div class="run-actions"><button class="demo-action" id="demoButton" type="button">模拟运行</button><button class="primary-action" id="startButton" type="button">运行测试</button></div></div>
+        <section class="results-panel" id="resultsPanel" aria-live="polite" hidden>
+          <div class="results-heading"><div><span class="detail-label">VALIDATION REPORT</span><h3>验证报告</h3></div><span class="results-status" id="resultsStatus">尚未运行</span></div>
+          <div class="run-progress" id="runProgress" hidden><p id="runNotice"></p><div class="progress-meta"><span id="progressLabel">等待答案</span><span id="elapsedTime">已用时 0 秒</span></div><progress id="progressBar" value="0" max="3" aria-label="已完成测试数"></progress></div>
+          <div class="results-list" id="resultsList"></div>
+        </section>
+      </section>
+    </main>
+
+    <dialog class="connection-dialog" id="connectionDialog" aria-labelledby="connectionTitle">
+      <div class="dialog-heading">
+        <div><span>MODEL CONNECTION</span><h2 id="connectionTitle">配置模型</h2><p>Key 会经过本站服务转发至指定 API，不写入本站日志、磁盘或浏览器存储。</p></div>
+        <button class="dialog-close" id="closeConnection" type="button" aria-label="关闭模型配置">关闭</button>
+      </div>
+      <form class="connection-form" id="connectionForm" novalidate>
+        <div class="field field-url"><label for="baseUrl">API Base URL</label><div class="url-input"><input id="baseUrl" type="text" placeholder="https://franklybuilds.com/v1" autocomplete="off" /></div><p class="field-help">支持获准转发的 HTTPS API 域名、带 /v1 的地址或完整端点。</p></div>
+        <div class="field field-key">
+          <div class="label-line"><label for="apiKey">API Key</label><span>不会保存</span></div>
+          <div class="key-input"><input id="apiKey" type="password" placeholder="sk-••••••••••••" autocomplete="off" spellcheck="false" /><button id="toggleKey" type="button" aria-pressed="false">显示</button></div>
+          <p class="field-help">刷新或关闭页面后自动清除。</p>
+        </div>
+        <div class="field"><label for="modelId">Model ID</label><input id="modelId" type="text" placeholder="输入模型名称" autocomplete="off" /></div>
+        <div class="field"><label for="protocol">接口协议</label><select id="protocol"><option value="responses">OpenAI Responses（/responses）</option><option value="messages">Anthropic Messages（/messages）</option><option value="gemini" disabled>Gemini（暂未适配）</option></select></div>
+        <label class="stream-option"><input id="streamResponse" type="checkbox" checked /> 流式接收回答</label>
+        <p class="field-help">慢模型建议开启；供应商不支持流式时可关闭。切换后需重新检查连接，不会自动重试。</p>
+        <p class="field-help">每次运行均重新生成答案，结果显示供应商返回的缓存读写 token。缓存命中取决于模型、相同前缀和有效期；短提示词可能不命中。</p>
+        <button class="secondary-action" id="connectionButton" type="submit">检查连接</button>
+        <p class="field-help">检查只发送一条短请求，输出上限 64 token；额度不是实际用量，推理也可能占用输出额度。</p>
+        <p class="connection-usage field-help" id="connectionUsage" role="status" aria-live="polite"></p>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="api-adapter.js"></script>
+    <script src="test-cases.js"></script>
+    <script src="demo-responses.js"></script>
+    <script src="result-renderer.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
