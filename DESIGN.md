@@ -142,6 +142,7 @@ Avoid both sharp rectangular dashboard chrome and excessive capsule shapes. Do n
 ### Desktop
 
 - A restrained sticky header contains the MIT wordmark, temporary-session state, and theme control.
+- Keep the relay link and GitHub repository icon in the header's neutral action group; allow wrapping on small screens. External links open in a new tab.
 - The main page uses an editorial introduction column beside the testing workbench.
 - The introduction explains the three-step workflow and key privacy boundary.
 - The workbench presents test selection first; connection settings do not occupy the main canvas.
@@ -153,6 +154,7 @@ Avoid both sharp rectangular dashboard chrome and excessive capsule shapes. Do n
 - Open model settings in a dedicated modal rather than embedding the full form inside the test workbench.
 - The modal contains API Base URL, API Key, Model ID, protocol, an explicit streaming toggle (on by default), and connection check with its actual token usage. Keep the 64-token probe limit visible; distinguish a completed check from reachability with an incomplete answer.
 - Use a warm surface header and soft-cream form band.
+- Show `https://` as a fixed, muted prefix in the API Base URL control; strip that prefix from pasted input and preserve the domain and path.
 - The modal must close via its close button, backdrop click, and Escape.
 
 ### Responsive behavior

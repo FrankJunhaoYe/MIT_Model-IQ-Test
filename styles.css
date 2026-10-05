@@ -48,6 +48,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .site-header { position: sticky; top: 0; z-index: 20; min-height: var(--header-height); padding: 0 clamp(20px, 4vw, 64px); display: grid; grid-template-columns: 1fr auto; align-items: center; border-bottom: 1px solid var(--line); background: var(--page); }
 .wordmark { display: inline-flex; width: max-content; align-items: center; gap: 13px; color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600; letter-spacing: -.02em; }
 .header-actions { justify-self: end; display: flex; align-items: center; gap: 10px; }
+.header-link { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 40px; padding: 0 8px; border-radius: var(--radius-control); color: var(--muted); font-size: 12px; text-decoration: none; white-space: nowrap; }
+.header-link:hover { color: var(--ink); background: var(--surface-card); }
+.github-link { width: 40px; padding: 0; }
 .session-label { padding: 6px 2px; color: var(--muted); font-size: 11px; }
 .text-button { min-width: 58px; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); color: var(--ink); background: transparent; font-size: 12px; font-weight: 600; transition: border-color 160ms ease, background 160ms ease; }
 .text-button:hover { border-color: var(--line-strong); background: var(--surface-card); }
@@ -93,9 +96,9 @@ input:hover, select:hover { border-color: var(--line-strong); }
 input:focus, select:focus { border-color: var(--ink); outline: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 12%, transparent); }
 .url-input, .key-input { position: relative; display: flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); transition: border-color 160ms ease, box-shadow 160ms ease; }
 .url-input:focus-within, .key-input:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 12%, transparent); }
-.url-input > span { padding-left: 14px; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
+.url-input > span { flex-shrink: 0; padding-left: 14px; color: var(--muted); font-family: var(--font-mono); font-size: 12px; }
 .url-input input, .key-input input { border: 0; background: transparent; box-shadow: none; }
-.url-input input { padding-left: 14px; }
+.url-input input { min-width: 0; padding-left: 4px; }
 .connection-form > .field-help { grid-column: 1 / -1; }
 .key-input input { padding-right: 70px; }
 .key-input button { position: absolute; top: 5px; right: 5px; bottom: 5px; min-width: 54px; padding: 0 12px; border: 0; border-radius: 8px; color: var(--muted); background: var(--surface-soft); font-size: 11px; font-weight: 600; transition: color 160ms ease, background 160ms ease; }
@@ -232,7 +235,8 @@ input:focus, select:focus { border-color: var(--ink); outline: 0; box-shadow: 0 
 
 @media (max-width: 680px) {
   :root { --header-height: 60px; }
-  .site-header { padding: 0 16px; }
+  .site-header { padding: 10px 16px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+  .header-actions { margin-left: auto; gap: 4px; }
   .wordmark { font-size: 12px; }
   .session-label { display: none; }
   .page { padding: 38px 16px 54px; }

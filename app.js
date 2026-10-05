@@ -127,8 +127,20 @@ function appendValidationReport(card, testKey, result) {
   card.append(report);
 }
 
+function normalizeBaseUrlInput() {
+  const prefix = baseUrl.value.match(/^\s*(?:https:\/\/)+/i);
+  if (!prefix) return;
+  const start = baseUrl.selectionStart;
+  const end = baseUrl.selectionEnd;
+  baseUrl.value = baseUrl.value.slice(prefix[0].length);
+  if (typeof start === 'number' && typeof end === 'number') {
+    baseUrl.setSelectionRange(Math.max(0, start - prefix[0].length), Math.max(0, end - prefix[0].length));
+  }
+}
+
 function readConfig() {
   if (window.location.protocol === 'file:') throw new Error('请先运行 start-local.ps1，再打开 http://127.0.0.1:8080 进行 API 测试。');
+  normalizeBaseUrlInput();
   const config = {
     stream: streamResponse.checked,
     baseUrl: baseUrl.value.trim(),
@@ -137,6 +149,8 @@ function readConfig() {
     protocol: protocol.value,
   };
   if (!config.baseUrl) throw new Error('请填写 API Base URL。');
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(config.baseUrl)) throw new Error('API 地址仅支持 HTTPS，请填写 HTTPS 地址。');
+  config.baseUrl = `https://${config.baseUrl}`;
   if (!config.apiKey.trim()) throw new Error('请填写 API Key。');
   if (!config.model) throw new Error('请填写 Model ID。');
   if (!['responses', 'messages'].includes(config.protocol)) throw new Error('请选择 Responses 或 Messages 协议。');
@@ -402,8 +416,12 @@ function invalidateConnection() {
 }
 
 [baseUrl, apiKey, modelId, protocol, streamResponse].forEach((input) => {
-  input.addEventListener('input', invalidateConnection);
-  input.addEventListener('change', invalidateConnection);
+  const onEdit = () => {
+    if (input === baseUrl) normalizeBaseUrlInput();
+    invalidateConnection();
+  };
+  input.addEventListener('input', onEdit);
+  input.addEventListener('change', onEdit);
 });
 
 connectionForm.addEventListener('submit', async (event) => {
