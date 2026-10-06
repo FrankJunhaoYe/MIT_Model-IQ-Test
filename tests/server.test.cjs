@@ -43,6 +43,17 @@ test('Relay serves only public assets, never source/tests/configuration files', 
     assert.equal((await fetch(origin + route)).status, 404);
   }
 });
+test('MIT allows the Sub2 frame ancestor without granting cross-origin API access', async () => {
+  for (const method of ['GET', 'HEAD']) {
+    const response = await fetch(origin + '/', { method });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-security-policy'), "connect-src 'self'; frame-ancestors 'self' https://franklybuilds.com; object-src 'none'; base-uri 'self'");
+    assert.equal(response.headers.get('x-frame-options'), null);
+  }
+  const response = await post(packet(), { Origin: 'https://franklybuilds.com' });
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get('access-control-allow-origin'), null);
+});
 for (const protocol of ['responses', 'messages']) {
   test(`Relay ${protocol}: browser adapter forwards history/cache and parses raw usage`, async () => {
     const call = protocol === 'messages' ? api.requestMessages : api.requestResponses;
