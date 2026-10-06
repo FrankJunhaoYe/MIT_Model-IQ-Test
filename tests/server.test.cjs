@@ -157,15 +157,19 @@ test('Relay enforces deadlines and releases concurrency after cancellation', asy
   assert.match(timeout.error.message, /本站等待上游超时/);
   assert.equal((await post(packet())).status, 200);
 });
-test('Relay admits three simultaneous tests, blocks a fourth and releases slots', async () => {
+for (const [label, limits, capacity] of [
+  ['per-IP default', {}, 3],
+  ['configured global', { maxConcurrent: 2, maxConcurrentPerIp: 3 }, 2],
+  ['configured per-IP', { maxConcurrent: 10, maxConcurrentPerIp: 4 }, 4],
+]) test(`Relay ${label} admits its capacity, blocks excess and releases slots`, async () => {
   let readinessTimer;
   let release;
   let started;
   let count = 0;
   const gate = new Promise(resolve => { release = resolve; });
   const ready = new Promise(resolve => { started = resolve; });
-  const relay = createServer({ allowedOrigins, forward: async () => {
-    if (++count === 3) started();
+  const relay = createServer({ allowedOrigins, ...limits, forward: async () => {
+    if (++count === capacity) started();
     await gate;
     return { status: 200, raw: '{"output_text":"OK"}' };
   } });
@@ -175,13 +179,13 @@ test('Relay admits three simultaneous tests, blocks a fourth and releases slots'
     method: 'POST', headers: { Origin: address, 'Content-Type': 'application/json', 'X-MIT-Request': '1' },
     body: JSON.stringify(packet({ timeoutMs: 2000 })),
   });
-  const pending = [send(), send(), send()];
+  const pending = Array.from({ length: capacity }, () => send());
   try {
     await Promise.race([ready, new Promise((_, reject) => {
-      readinessTimer = setTimeout(() => reject(new Error('Three requests did not start concurrently')), 1500);
+      readinessTimer = setTimeout(() => reject(new Error('Requests did not start concurrently')), 1500);
     })]);
     assert.equal((await send()).status, 429);
-    assert.equal(count, 3);
+    assert.equal(count, capacity);
     release();
     for (const response of await Promise.all(pending)) assert.equal(response.status, 200);
     assert.equal((await send()).status, 200);
@@ -196,6 +200,91 @@ test('Relay admits three simultaneous tests, blocks a fourth and releases slots'
 test('Public address checks reject IPv4/IPv6 loopback, private, mapped and metadata addresses', () => {
   for (const address of ['127.0.0.1', '10.1.2.3', '169.254.169.254', '172.16.0.1', '192.168.1.1', '100.64.0.1', '0.0.0.0', '224.0.0.1', '::1', '::ffff:127.0.0.1', 'fc00::1', 'fe80::1', '2001:db8::1', '2002:7f00:1::']) assert.equal(publicAddress(address), false, address);
   for (const address of ['8.8.8.8', '1.1.1.1', '2606:4700:4700::1111']) assert.equal(publicAddress(address), true);
+});
+
+test('Thirty concurrent requests from ten proxy clients stay isolated; limits release after completion', async () => {
+  let release, ready, timer;
+  let started = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  const allStarted = new Promise(resolve => { ready = resolve; });
+  const relay = createServer({ trustedProxies: ['127.0.0.1/32'], forward: async job => {
+    if (++started === 30) ready();
+    await gate;
+    return { status: 200, raw: JSON.stringify({ key: job.apiKey, endpoint: job.url.href, input: job.body.input }) };
+  } });
+  await new Promise(resolve => relay.listen(0, '127.0.0.1', resolve));
+  const address = `http://127.0.0.1:${relay.address().port}`;
+  const send = (user, item) => fetch(address + '/api/model', {
+    method: 'POST', headers: { Origin: address, 'Content-Type': 'application/json', 'X-MIT-Request': '1',
+      'X-Forwarded-For': `198.51.100.${user}` },
+    body: JSON.stringify(packet({ endpoint: `https://relay-${user}.example.com/v1/responses`,
+      apiKey: `synthetic-${user}`, body: { ...packet().body, input: `question-${item}` }, timeoutMs: 5000 })),
+  });
+  const jobs = Array.from({ length: 30 }, (_, index) => ({ user: Math.floor(index / 3) + 1, item: index }));
+  const pending = jobs.map(job => send(job.user, job.item));
+  try {
+    await Promise.race([allStarted, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Thirty requests did not start')), 3000);
+    })]);
+    assert.equal((await send(11, 31)).status, 429);
+    release();
+    const responses = await Promise.all(pending);
+    for (let index = 0; index < responses.length; index++) {
+      assert.equal(responses[index].status, 200);
+      assert.deepEqual(await responses[index].json(), { key: `synthetic-${jobs[index].user}`,
+        endpoint: `https://relay-${jobs[index].user}.example.com/v1/responses`, input: `question-${jobs[index].item}` });
+    }
+    assert.equal((await send(11, 32)).status, 200);
+  } finally {
+    clearTimeout(timer); release(); await Promise.allSettled(pending);
+    relay.closeAllConnections(); await new Promise(resolve => relay.close(resolve));
+  }
+});
+
+test('Forwarded headers require trusted peers and cannot bypass client rate limits', async () => {
+  for (const trustedProxies of [[], ['127.0.0.1'], ['127.0.0.0/8']]) {
+    const relay = createServer({ trustedProxies, requestsPerMinute: 1, forward: async () => ({ status: 200, raw: '{}' }) });
+    await new Promise(resolve => relay.listen(0, '127.0.0.1', resolve));
+    const address = `http://127.0.0.1:${relay.address().port}`;
+    const send = header => fetch(address + '/api/model', { method: 'POST',
+      headers: { Origin: address, 'Content-Type': 'application/json', 'X-MIT-Request': '1', 'X-Forwarded-For': header },
+      body: JSON.stringify(packet()) });
+    try {
+      assert.equal((await send('1.1.1.1, 198.51.100.1')).status, 200);
+      assert.equal((await send('8.8.8.8, 198.51.100.1')).status, 429);
+      assert.equal((await send('198.51.100.2')).status, trustedProxies.length ? 200 : 429);
+      assert.equal((await send('invalid-client')).status, trustedProxies.length ? 400 : 429);
+    } finally {
+      relay.closeAllConnections(); await new Promise(resolve => relay.close(resolve));
+    }
+  }
+});
+
+test('Equivalent IPv6 and IPv4-mapped client addresses share rate limits', async () => {
+  const relay = createServer({ trustedProxies: ['127.0.0.1'], requestsPerMinute: 1,
+    forward: async () => ({ status: 200, raw: '{}' }) });
+  await new Promise(resolve => relay.listen(0, '127.0.0.1', resolve));
+  const address = `http://127.0.0.1:${relay.address().port}`;
+  const send = ip => fetch(address + '/api/model', { method: 'POST',
+    headers: { Origin: address, 'Content-Type': 'application/json', 'X-MIT-Request': '1', 'X-Forwarded-For': ip },
+    body: JSON.stringify(packet()) });
+  try {
+    assert.equal((await send('2001:db8::1')).status, 200);
+    assert.equal((await send('2001:0db8:0:0:0:0:0:1')).status, 429);
+    assert.equal((await send('198.51.100.1')).status, 200);
+    assert.equal((await send('::ffff:198.51.100.1')).status, 429);
+  } finally {
+    relay.closeAllConnections(); await new Promise(resolve => relay.close(resolve));
+  }
+});
+
+test('Relay validates limits and trusted proxy configuration before listening', () => {
+  for (const name of ['maxConcurrent', 'maxConcurrentPerIp', 'requestsPerMinute']) {
+    for (const value of [0, -1, 1.5, '', 'invalid', Infinity]) assert.throws(() => createServer({ [name]: value }));
+  }
+  for (const value of ['*', 'localhost', '0.0.0.0/33', '::1/129', '127.0.0.1/', '127.0.0.1/8/8']) {
+    assert.throws(() => createServer({ trustedProxies: [value] }));
+  }
 });
 test('Upstream rejects DNS rebinding before opening any socket', async () => {
   const job = validateEnvelope(packet(), configuredOrigins(allowedOrigins));

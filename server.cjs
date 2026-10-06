@@ -19,6 +19,57 @@ class RelayError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+function positiveLimit(value, fallback, name) {
+  const limit = value === undefined ? fallback : Number(value);
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new Error(`${name} 必须为正整数。`);
+  return limit;
+}
+
+function normalizedIp(address) {
+  if (!net.isIP(address)) return null;
+  if (net.isIP(address) === 4) return address;
+  const canonical = new URL(`http://[${address}]/`).hostname.slice(1, -1);
+  const mapped = canonical.match(/^::ffff:([0-9a-f]+):([0-9a-f]+)$/);
+  if (!mapped) return canonical;
+  const high = parseInt(mapped[1], 16), low = parseInt(mapped[2], 16);
+  return [high >> 8, high & 255, low >> 8, low & 255].join('.');
+}
+
+function configuredProxies(values = []) {
+  const proxies = new net.BlockList();
+  for (const value of values) {
+    const parts = value.split('/');
+    const address = normalizedIp(parts[0]);
+    if (!address || parts.length > 2) throw new Error('MIT_TRUSTED_PROXIES 必须为 IP 或 CIDR。');
+    const family = net.isIP(address) === 4 ? 'ipv4' : 'ipv6';
+    if (parts.length === 1) proxies.addAddress(address, family);
+    else {
+      const prefix = Number(parts[1]);
+      if (!/^\d+$/.test(parts[1]) || !Number.isInteger(prefix) || prefix > (family === 'ipv4' ? 32 : 128)) {
+        throw new Error('MIT_TRUSTED_PROXIES 的 CIDR 前缀无效。');
+      }
+      proxies.addSubnet(address, prefix, family);
+    }
+  }
+  return proxies;
+}
+
+function clientAddress(req, proxies) {
+  const peer = normalizedIp(req.socket.remoteAddress);
+  const trusted = address => proxies.check(address, net.isIP(address) === 4 ? 'ipv4' : 'ipv6');
+  if (!trusted(peer)) return peer;
+  const header = req.headers['x-forwarded-for'];
+  if (header === undefined) return peer;
+  if (typeof header !== 'string' || header.length > 4096) throw new RelayError(400, '代理客户端 IP 无效。');
+  const chain = header.split(',').map(value => normalizedIp(value.trim()));
+  if (chain.length > 32 || chain.some(address => !address)) throw new RelayError(400, '代理客户端 IP 无效。');
+  // Walk from the socket peer toward the client. Never use entries beyond the
+  // first untrusted hop, which could have been supplied by that client.
+  let address = peer;
+  for (let index = chain.length - 1; index >= 0 && trusted(address); index--) address = chain[index];
+  return address;
+}
+
 function configuredOrigins(values) {
   return new Set(values.map(value => {
     if (value === '*') return value;
@@ -244,6 +295,10 @@ function createServer(options = {}) {
   const allowedOrigins = configuredOrigins(options.allowedOrigins || DEFAULT_ORIGINS);
   const publicOrigin = options.publicOrigin ? new URL(options.publicOrigin).origin : null;
   const forward = options.forward || forwardUpstream;
+  const maxConcurrent = positiveLimit(options.maxConcurrent, 30, 'MIT_MAX_CONCURRENT');
+  const maxConcurrentPerIp = positiveLimit(options.maxConcurrentPerIp, 3, 'MIT_MAX_CONCURRENT_PER_IP');
+  const requestsPerMinute = positiveLimit(options.requestsPerMinute, 30, 'MIT_REQUESTS_PER_MINUTE');
+  const trustedProxies = configuredProxies(options.trustedProxies);
   const clients = new Map();
   let active = 0;
   const server = http.createServer(async (req, res) => {
@@ -279,14 +334,16 @@ function createServer(options = {}) {
       if (Number(req.headers['content-length']) > MAX_BODY) throw new RelayError(413, '请求超过 2 MB 上限。');
       const now = Date.now();
       for (const [key, value] of clients) if (!value.active && value.until < now) clients.delete(key);
-      const ip = req.socket.remoteAddress;
+      const ip = clientAddress(req, trustedProxies);
       client = clients.get(ip);
       if (!client) {
         if (clients.size >= 1000) throw new RelayError(503, '服务繁忙，请稍后重试。');
         client = { count: 0, active: 0, until: now + 60000 }; clients.set(ip, client);
       }
       if (client.until < now) { client.count = 0; client.until = now + 60000; }
-      if (active >= 8 || client.active >= 3 || client.count >= 30) throw new RelayError(429, '请求过于频繁，请等待当前请求完成后重试。');
+      if (active >= maxConcurrent || client.active >= maxConcurrentPerIp || client.count >= requestsPerMinute) {
+        throw new RelayError(429, '请求过于频繁，请等待当前请求完成后重试。');
+      }
       active++; client.active++; client.count++; admitted = true;
       envelope = await readJson(req);
       job = validateEnvelope(envelope, allowedOrigins);
@@ -343,11 +400,15 @@ if (require.main === module) {
     const server = createServer({
       allowedOrigins: process.env.MIT_ALLOWED_ORIGINS ? process.env.MIT_ALLOWED_ORIGINS.split(',').map(value => value.trim()).filter(Boolean) : DEFAULT_ORIGINS,
       publicOrigin: process.env.PUBLIC_ORIGIN,
+      maxConcurrent: process.env.MIT_MAX_CONCURRENT,
+      maxConcurrentPerIp: process.env.MIT_MAX_CONCURRENT_PER_IP,
+      requestsPerMinute: process.env.MIT_REQUESTS_PER_MINUTE,
+      trustedProxies: process.env.MIT_TRUSTED_PROXIES ? process.env.MIT_TRUSTED_PROXIES.split(',').map(value => value.trim()).filter(Boolean) : [],
     });
     const port = Number(process.env.PORT || 8080);
     const host = process.env.HOST || '127.0.0.1';
     server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? '端口已被占用，请设置其他 PORT。' : '服务启动失败，请检查配置。'); process.exitCode = 1; });
     server.listen(port, host, () => console.log(`MIT 已启动：http://${host}:${port}（Key 仅临时转发，不保存）`));
-  } catch { console.error('服务配置无效，请检查 PUBLIC_ORIGIN、MIT_ALLOWED_ORIGINS 和 PORT。'); process.exitCode = 1; }
+  } catch { console.error('服务配置无效，请检查来源、端口、并发额度和可信代理配置。'); process.exitCode = 1; }
 }
 module.exports = { createServer, forwardUpstream, resolvePublicDns, publicAddress, validateEnvelope, configuredOrigins, RelayError, DEFAULT_ORIGINS };
