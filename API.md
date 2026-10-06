@@ -63,6 +63,34 @@ docker run --rm -p 127.0.0.1:8080:8080 -e PUBLIC_ORIGIN=https://test.example.com
 
 如果本机代理采用 Fake-IP DNS 模式，系统可能把公网域名解析到 `198.18.0.0/15` 合成地址。仅在域名的全部系统解析结果属于此范围时，服务会通过 Cloudflare HTTPS DNS 独立查询 A/AAAA；查询只包含域名，不包含 Key、请求正文或模型信息。查询结果仍须全部通过公网检查，然后固定真实公网地址建立 TLS 连接。其他私网解析结果、直接输入的合成 IP 或公共 DNS 查询失败都不会放行。
 
+## Ubuntu + Docker Compose + Nginx Proxy Manager + Cloudflare
+
+仓库提供 `compose.yaml` 和 `.env.example`，适用于 Nginx Proxy Manager（NPM）也运行在同一服务器 Docker 中的情况。MIT 仅通过已有 Docker 网络提供 8080，不发布宿主机端口；NPM 通过容器网络转发。服务器需安装 Docker Engine 和 Compose 插件，已有 NPM 无需重装。
+
+1. 将源码上传或克隆到服务器目录，如 `/opt/mit`。运行 `docker ps` 找到 NPM 容器名，再运行 `docker inspect <NPM容器名> --format '{{json .NetworkSettings.Networks}}'`，选择它已经连接的 Docker 网络。
+2. 在项目目录执行 `cp .env.example .env`，编辑 `.env`：`PUBLIC_ORIGIN` 改为实际访问的 `https://你的域名`（无尾部斜杠或页面路径），`NPM_NETWORK` 改为上一步的网络名。此文件不填写模型 Key；Key 由用户在网页中输入。
+3. 执行 `docker compose config --quiet` 和 `docker compose up -d --build`，再用 `docker compose ps` 确认服务 healthy。容器异常退出后自动重启；healthcheck 仅报告健康状态，不会自动重启仍在运行的 unhealthy 容器。
+4. NPM 新建 Proxy Host：Domain Names 为实际域名，Scheme 为 `http`，Forward Hostname 为 `mit-model-iq-test`，Forward Port 为 `8080`。不要填写 `127.0.0.1`，它在 NPM 容器中指向 NPM 自己。MIT 不需要 WebSocket；不要缓存 API。NPM 默认应保留浏览器访问的 Host；自定义代理规则也必须保留，否则服务端会拒绝来源。
+5. 在 NPM 的 Advanced 填写以下指令，作用于该 Proxy Host，不再添加一个重复的 `location /`。保存后检查 NPM 没有生成配置错误：
+
+   ```nginx
+   proxy_connect_timeout 30s;
+   proxy_send_timeout 190s;
+   proxy_read_timeout 190s;
+   proxy_buffering off;
+   proxy_cache off;
+   client_max_body_size 2m;
+   ```
+
+6. Cloudflare 为该域名创建 A 记录指向服务器公网 IPv4；只有服务器实际支持 IPv6 时才添加 AAAA。建议首次上线使用灰云（仅 DNS），先排除 Cloudflare 代理对长请求的影响。服务器防火墙/云安全组放行 NPM 所用的 80/443；MIT 无需公网 8080。NPM 申请有效证书并开启 Force SSL，保留 NPM 的续期配置。HTTP 验证需要 80 可达；DNS 验证可使用仅授权相应域名 DNS 编辑的 Cloudflare Token，该 Token 只配置在 NPM 中。
+7. 如需橙云代理，Cloudflare SSL/TLS 使用 Full (strict)，源站须有有效证书，不使用 Flexible；确保没有对 `/api/*` 配置 Cache Everything。Cloudflare 代理有独立的响应读取超时，NPM 的 190 秒不能覆盖它；长时间无首段输出或非流式等待可能返回 524。流式也不保证一定避免超时。若出现此问题，可将这个测试子域名改为仅 DNS，保留源站 HTTPS；不改变本站 180 秒上限。
+
+上线验收：访问 `https://你的域名/api/health` 应返回 `ok: true`，主页面与 `result-renderer.js` 可加载，`/server.cjs`、`/.env`、`/compose.yaml` 返回 404；通过 `?demo=1` 检查结果页，再在网页中使用有效 Key 检查连接、真实短题和鹈鹕长回答。两种协议分别验证，原始回答与用量需可查看。不要在命令行、日志或截图中提交真实 Key；NPM/APM 不采集请求正文或认证头。
+
+当前限流按直接连接来源 IP 执行，不信任转发 IP 头。因此经 NPM 后，经过同一代理 IP 的访客会共享 3 个并发名额与每分钟 30 次限制。少量使用可以先保留；公开多人使用前，应另行实现可信代理范围和客户端 IP 校验，再配置网关限流，不能直接信任任意 `X-Forwarded-For`。
+
+更新源码后运行 `docker compose up -d --build` 并重新验收；保留上一版本源码/提交以便重建回退。本地未安装 Docker，以上 Compose、NPM 和 Cloudflare 配置尚需在目标服务器验证，不能把文件检查当作镜像构建或公网验收通过。
+
 ## 连接中断与长回答排查
 
 连接检查和三项测试默认都使用 `stream: true`，可在配置弹窗明确关闭“流式接收回答”；单项重试沿用本次配置。鹈鹕输出上限为 16384 token、单次等待上限 180 秒，短题等待上限 90 秒。Responses 和 Messages 均支持 SSE 流式解析，同源后端立即逐段转发，不等待整段生成后才发送给浏览器。部署时须为 `/api/model` 关闭反向代理响应缓冲（服务端发送 `X-Accel-Buffering: no`），代理读取超时至少 190 秒。流式可以减少长时间没有响应数据导致的中断，但若供应商不支持流式、缓冲响应或在第一段返回前断开，仍可能失败；不会自动改回非流式或重复计费重试。

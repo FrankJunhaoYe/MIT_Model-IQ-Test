@@ -35,6 +35,7 @@ npm test
 部署需要 Node.js 长进程或 Docker，网页和 API 必须保持同源。纯静态托管无法提供完整服务。
 
 - [API.md](API.md)：接口、提示词缓存、启动、部署及验证说明。
+- [DEPLOY.md](DEPLOY.md)：Ubuntu、Docker、Nginx Proxy Manager 和 Cloudflare 的服务器部署交接与验收清单。
 - [DESIGN.md](DESIGN.md)：项目视觉规范。
 - [AGENTS.md](AGENTS.md)：项目 Agent 工作规范。
 

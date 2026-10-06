@@ -1,0 +1,29 @@
+services:
+  mit:
+    build: .
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN in .env}
+      MIT_ALLOWED_ORIGINS: ${MIT_ALLOWED_ORIGINS:-*}
+    expose:
+      - "8080"
+    networks:
+      npm:
+        aliases:
+          - mit-model-iq-test
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  npm:
+    external: true
+    name: ${NPM_NETWORK:?Set NPM_NETWORK to the existing Nginx Proxy Manager network}
