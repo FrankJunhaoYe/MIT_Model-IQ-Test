@@ -267,7 +267,7 @@ function createServer(options = {}) {
         const asset = ASSETS.get(pathname);
         if (!asset) throw new RelayError(404, '页面不存在。');
         const bytes = await fs.readFile(path.join(__dirname, asset[0]));
-        res.writeHead(200, { 'Content-Type': asset[1], 'Content-Security-Policy': "connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'" });
+        res.writeHead(200, { 'Content-Type': asset[1], 'Content-Security-Policy': "connect-src 'self'; frame-ancestors 'self' https://franklybuilds.com; object-src 'none'; base-uri 'self'" });
         res.end(req.method === 'HEAD' ? undefined : bytes); return;
       }
       if (pathname !== '/api/model') throw new RelayError(404, '接口不存在。');

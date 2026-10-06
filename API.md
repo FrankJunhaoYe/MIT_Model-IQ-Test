@@ -91,6 +91,14 @@ docker run --rm -p 127.0.0.1:8080:8080 -e PUBLIC_ORIGIN=https://test.example.com
 
 更新源码后运行 `docker compose up -d --build` 并重新验收；保留上一版本源码/提交以便重建回退。本地未安装 Docker，以上 Compose、NPM 和 Cloudflare 配置尚需在目标服务器验证，不能把文件检查当作镜像构建或公网验收通过。
 
+## Sub2 侧边栏嵌入
+
+MIT 的响应头使用 `frame-ancestors 'self' https://franklybuilds.com`，允许同源页面和 `https://franklybuilds.com` 通过 iframe 嵌入。其他域名、HTTP 和 `www` 子域不在允许范围内。Sub2 菜单地址填写 `https://mit.franklybuilds.com`。
+
+更新源码后重启 Node 服务；Docker Compose 部署执行 `docker compose up -d --build`。`PUBLIC_ORIGIN` 仍应为 MIT 自己的来源 `https://mit.franklybuilds.com`，不要改成 Sub2 来源；`MIT_ALLOWED_ORIGINS` 是上游模型 API 的允许列表，与 iframe 嵌入无关。MIT iframe 内仍向 MIT 自己的 `/api/model` 发送同源请求，不向父页面开放跨域 API。
+
+部署后检查 MIT 的最终响应头包含上述 `frame-ancestors`，NPM 或 Cloudflare 不应额外添加阻止嵌入的 `X-Frame-Options: DENY/SAMEORIGIN` 或更严格的 `frame-ancestors`。在 Sub2 中验证页面加载、配置弹窗和模拟运行；若父页面设置了 iframe sandbox，还需支持脚本、保持来源及结果页所需的新窗口能力。鹈鹕作品的隔离 sandbox 保持不变。
+
 ## 连接中断与长回答排查
 
 连接检查和三项测试默认都使用 `stream: true`，可在配置弹窗明确关闭“流式接收回答”；单项重试沿用本次配置。鹈鹕输出上限为 16384 token、单次等待上限 180 秒，短题等待上限 90 秒。Responses 和 Messages 均支持 SSE 流式解析，同源后端立即逐段转发，不等待整段生成后才发送给浏览器。部署时须为 `/api/model` 关闭反向代理响应缓冲（服务端发送 `X-Accel-Buffering: no`），代理读取超时至少 190 秒。流式可以减少长时间没有响应数据导致的中断，但若供应商不支持流式、缓冲响应或在第一段返回前断开，仍可能失败；不会自动改回非流式或重复计费重试。
