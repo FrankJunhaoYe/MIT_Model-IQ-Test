@@ -351,7 +351,7 @@ async function runTest(testKey, session) {
       await demoDelay(900);
       result = { ...tests[testKey].evaluate(text), text, demo: true, meta: '模拟数据 · 预置回答 · 未调用模型接口' };
     } else {
-      const response = await requestModel(config, tests[testKey].prompt, { signal: controller.signal, stream: config.stream !== false, maxOutputTokens: tests[testKey].maxOutputTokens || 4096, timeoutMs: tests[testKey].timeoutMs || 90000 });
+      const response = await requestModel(config, tests[testKey].prompt, { signal: controller.signal, stream: config.stream !== false, maxOutputTokens: tests[testKey].maxOutputTokens || 4096, timeoutMs: tests[testKey].timeoutMs ?? api.DEFAULT_TIMEOUT_MS });
       result = {
         ...tests[testKey].evaluate(response.text), text: response.text,
         meta: `${protocolLabel(config.protocol)} · ${response.endpoint}${response.usage ? ` · ${response.usage}` : ''}`,
@@ -379,7 +379,7 @@ async function runTest(testKey, session) {
 
 async function checkConnection(config, signal) {
   const prompt = 'Reply with OK only.';
-  const response = await requestModel(config, prompt, { signal, stream: config.stream !== false, maxOutputTokens: 64 });
+  const response = await requestModel(config, prompt, { signal, stream: config.stream !== false, maxOutputTokens: 64, timeoutMs: api.DEFAULT_TIMEOUT_MS });
   if (!response.text || !response.text.trim()) throw new Error('接口返回了空内容，无法确认协议是否正确。');
   return response;
 }

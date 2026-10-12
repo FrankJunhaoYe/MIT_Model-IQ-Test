@@ -9,7 +9,7 @@ const path = require('node:path');
 const DEFAULT_ORIGINS = ['*'];
 const MAX_BODY = 2 * 1024 * 1024;
 const MAX_RESPONSE = 8 * 1024 * 1024;
-const MAX_TIMEOUT = 180_000;
+const MAX_TIMEOUT = 300_000;
 const ASSETS = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ...['index.html', 'styles.css', 'app.js', 'api-adapter.js', 'test-cases.js', 'demo-responses.js', 'result-renderer.js'].map(file =>
@@ -159,8 +159,8 @@ function validateEnvelope(data, allowedOrigins) {
   if (!(typeof input === 'string' && input.trim()) && !(Array.isArray(input) && input.length)) {
     throw new RelayError(400, '请求内容不能为空。');
   }
-  const timeoutMs = Number(data.timeoutMs ?? 30000);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT) throw new RelayError(400, '请求超时上限为 180 秒。');
+  const timeoutMs = Number(data.timeoutMs ?? MAX_TIMEOUT);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT) throw new RelayError(400, '请求超时上限为 300 秒。');
   return { url, protocol: data.protocol, apiKey: data.apiKey.trim(), body, timeoutMs };
 }
 

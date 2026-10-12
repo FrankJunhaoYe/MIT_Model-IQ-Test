@@ -59,9 +59,9 @@ docker compose exec -T mit node -e "fetch('http://127.0.0.1:8080/api/health').th
 | Forward Port | `8080` |
 | SSL | 有效证书，开启 Force SSL |
 
-Advanced 配置见 `API.md` 对应章节：读取超时 190 秒、关闭响应缓冲和缓存、请求大小 2 MB。不要重复添加 `location /`；保存后检查 NPM 的 Nginx 配置有效，确认 Host 保留为实际访问域名。调整现有 NPM 配置前保留备份，不直接覆盖其数据库或批量改生成配置。
+Advanced 配置见 `API.md` 对应章节：读取超时 310 秒、关闭响应缓冲和缓存、请求大小 2 MB。不要重复添加 `location /`；保存后检查 NPM 的 Nginx 配置有效，确认 Host 保留为实际访问域名。调整现有 NPM 配置前保留备份，不直接覆盖其数据库或批量改生成配置。
 
-Cloudflare A 记录指向服务器公网 IPv4；没有可用 IPv6 不添加 AAAA。首次验收建议灰云（仅 DNS），仍由 NPM 提供 HTTPS。若启用橙云，使用 Full (strict)，API 不缓存；Cloudflare 自身超时不受 NPM 的 190 秒设置控制。Cloudflare DNS Token 只在确有需要时通过 NPM 的安全配置入口设置，不提交仓库或输出。
+Cloudflare A 记录指向服务器公网 IPv4；没有可用 IPv6 不添加 AAAA。首次验收建议灰云（仅 DNS），仍由 NPM 提供 HTTPS。若启用橙云，使用 Full (strict)，API 不缓存；Cloudflare 自身超时不受 NPM 的 310 秒设置控制。Cloudflare DNS Token 只在确有需要时通过 NPM 的安全配置入口设置，不提交仓库或输出。
 
 若没有权限配置 NPM 或 Cloudflare，完成可以执行的容器部署和检查，然后列出准确的待填字段交给维护者；不要宣称公网已上线。
 

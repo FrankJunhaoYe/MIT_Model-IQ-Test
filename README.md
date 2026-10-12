@@ -59,7 +59,7 @@ npm test
 
 仓库提供 [Dockerfile](Dockerfile)、[compose.yaml](compose.yaml) 和 [.env.example](.env.example)。Ubuntu + Docker + Nginx Proxy Manager + Cloudflare 的部署流程见 [DEPLOY.md](DEPLOY.md)：填写实际域名与 NPM 网络，将流量转发到 `mit-model-iq-test:8080`，由 NPM 提供 HTTPS。
 
-反向代理读取超时至少 190 秒，并关闭响应缓冲与 API 缓存。Cloudflare 橙云有独立的超时限制，首次验收建议使用灰云（仅 DNS）。当前经同一代理 IP 的访客共享 3 个并发名额与每分钟 30 次限制，公开多人使用前需评估。
+反向代理读取超时至少 310 秒，并关闭响应缓冲与 API 缓存。Cloudflare 橙云有独立的超时限制，首次验收建议使用灰云（仅 DNS）。当前经同一代理 IP 的访客共享 3 个并发名额与每分钟 30 次限制，公开多人使用前需评估。
 
 ## 文档
 

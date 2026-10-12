@@ -158,7 +158,14 @@ test('Relay rejects oversized, non-boolean streaming, malformed or missing-crede
   assert.equal((await post(packet({ body: { ...packet().body, stream: 'true' } }))).status, 400);
   assert.equal((await post(packet({ body: { ...packet().body, input: 'x'.repeat(2 * 1024 * 1024) } }))).status, 413);
   assert.equal((await post(packet(), { 'Content-Type': 'text/plain' })).status, 415);
-  assert.equal((await post(packet({ timeoutMs: 180001 }))).status, 400);
+  assert.equal((await post(packet({ timeoutMs: 300001 }))).status, 400);
+});
+test('Relay accepts the five-minute deadline and defaults to it', async () => {
+  assert.equal(api.DEFAULT_TIMEOUT_MS, 300000);
+  assert.equal(validateEnvelope(packet({ timeoutMs: undefined }), new Set(allowedOrigins)).timeoutMs, 300000);
+  for (const timeoutMs of [180001, 300000]) {
+    assert.equal((await post(packet({ timeoutMs }))).status, 200);
+  }
 });
 test('Relay enforces deadlines and releases concurrency after cancellation', async () => {
   const response = await post(packet({ body: { ...packet().body, model: 'slow' }, timeoutMs: 40 }));

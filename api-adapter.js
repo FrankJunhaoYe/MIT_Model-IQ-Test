@@ -1,7 +1,7 @@
 /* Framework-free OpenAI Responses / Anthropic Messages transport. */
 (function exposeApiAdapter(global) {
   'use strict';
-  const DEFAULT_TIMEOUT_MS = 30_000;
+  const DEFAULT_TIMEOUT_MS = 300_000;
   const DEFAULT_MAX_OUTPUT_TOKENS = 1_024;
   class ApiError extends Error {
     constructor(message, options = {}) {
