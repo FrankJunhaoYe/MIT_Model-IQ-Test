@@ -177,6 +177,7 @@ test('Relay enforces deadlines and releases concurrency after cancellation', asy
 });
 for (const [label, limits, capacity] of [
   ['per-IP default', {}, 3],
+  ['global default', { maxConcurrentPerIp: 50, requestsPerMinute: 60 }, 40],
   ['configured global', { maxConcurrent: 2, maxConcurrentPerIp: 3 }, 2],
   ['configured per-IP', { maxConcurrent: 10, maxConcurrentPerIp: 4 }, 4],
 ]) test(`Relay ${label} admits its capacity, blocks excess and releases slots`, async () => {
@@ -220,13 +221,13 @@ test('Public address checks reject IPv4/IPv6 loopback, private, mapped and metad
   for (const address of ['8.8.8.8', '1.1.1.1', '2606:4700:4700::1111']) assert.equal(publicAddress(address), true);
 });
 
-test('Thirty concurrent requests from ten proxy clients stay isolated; limits release after completion', async () => {
+test('Forty concurrent requests from fourteen proxy clients stay isolated; limits release after completion', async () => {
   let release, ready, timer;
   let started = 0;
   const gate = new Promise(resolve => { release = resolve; });
   const allStarted = new Promise(resolve => { ready = resolve; });
   const relay = createServer({ trustedProxies: ['127.0.0.1/32'], forward: async job => {
-    if (++started === 30) ready();
+    if (++started === 40) ready();
     await gate;
     return { status: 200, raw: JSON.stringify({ key: job.apiKey, endpoint: job.url.href, input: job.body.input }) };
   } });
@@ -238,13 +239,13 @@ test('Thirty concurrent requests from ten proxy clients stay isolated; limits re
     body: JSON.stringify(packet({ endpoint: `https://relay-${user}.example.com/v1/responses`,
       apiKey: `synthetic-${user}`, body: { ...packet().body, input: `question-${item}` }, timeoutMs: 5000 })),
   });
-  const jobs = Array.from({ length: 30 }, (_, index) => ({ user: Math.floor(index / 3) + 1, item: index }));
+  const jobs = Array.from({ length: 40 }, (_, index) => ({ user: Math.floor(index / 3) + 1, item: index }));
   const pending = jobs.map(job => send(job.user, job.item));
   try {
     await Promise.race([allStarted, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('Thirty requests did not start')), 3000);
+      timer = setTimeout(() => reject(new Error('Forty requests did not start')), 3000);
     })]);
-    assert.equal((await send(11, 31)).status, 429);
+    assert.equal((await send(15, 41)).status, 429);
     release();
     const responses = await Promise.all(pending);
     for (let index = 0; index < responses.length; index++) {
@@ -252,7 +253,7 @@ test('Thirty concurrent requests from ten proxy clients stay isolated; limits re
       assert.deepEqual(await responses[index].json(), { key: `synthetic-${jobs[index].user}`,
         endpoint: `https://relay-${jobs[index].user}.example.com/v1/responses`, input: `question-${jobs[index].item}` });
     }
-    assert.equal((await send(11, 32)).status, 200);
+    assert.equal((await send(15, 42)).status, 200);
   } finally {
     clearTimeout(timer); release(); await Promise.allSettled(pending);
     relay.closeAllConnections(); await new Promise(resolve => relay.close(resolve));
